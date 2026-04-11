@@ -1,0 +1,301 @@
+"use strict";
+
+import test from "node:test";
+import assert from "node:assert/strict";
+
+let domainflagModulePromise = null;
+let parametersModulePromise = null;
+
+function createStorageArea(backingStore) {
+	return {
+		get(keys, callback) {
+			const keyList = Array.isArray(keys) ? keys : [keys];
+			const result = {};
+			keyList.forEach(function(key) {
+				if (Object.prototype.hasOwnProperty.call(backingStore, key)) {
+					result[key] = backingStore[key];
+				}
+			});
+			callback(result);
+		},
+		set(value, callback) {
+			Object.assign(backingStore, value);
+			callback?.();
+		},
+		clear(callback) {
+			Object.keys(backingStore).forEach(function(key) {
+				delete backingStore[key];
+			});
+			callback?.();
+		},
+	};
+}
+
+async function loadModules() {
+	if (domainflagModulePromise === null) {
+		domainflagModulePromise = import("../script/domainflag.js");
+	}
+	if (parametersModulePromise === null) {
+		parametersModulePromise = import("../script/parameters.js");
+	}
+
+	const [domainflagModule, parametersModule] = await Promise.all([
+		domainflagModulePromise,
+		parametersModulePromise,
+	]);
+
+	return { domainflagModule, parametersModule };
+}
+
+async function createHarness({
+	tabUrls = [],
+	managedStorage = {},
+	sessionStorage = {},
+	syncStorage = {},
+	localStorage = {},
+} = {}) {
+	let tabCallIndex = 0;
+	const fetchCalls = [];
+	const actionCalls = {
+		setIcon: [],
+		setPopup: [],
+		setTitle: [],
+	};
+
+	class FakeOffscreenCanvas {
+		constructor(width, height) {
+			this.width = width;
+			this.height = height;
+		}
+
+		getContext() {
+			return {
+				clearRect() {},
+				drawImage() {},
+				getImageData() {
+					return {
+						data: new Uint8ClampedArray(16 * 16 * 4),
+						width: 16,
+						height: 16,
+					};
+				},
+			};
+		}
+	}
+
+	globalThis.chrome = {
+		runtime: {
+			lastError: null,
+			getManifest() {
+				return { version: "2.3.0" };
+			},
+		},
+		tabs: {
+			get(tabId, callback) {
+				const nextUrl =
+					tabUrls[Math.min(tabCallIndex, Math.max(tabUrls.length - 1, 0))] ?? null;
+				tabCallIndex += 1;
+				callback(nextUrl === null ? null : { id: tabId, url: nextUrl });
+			},
+		},
+		action: {
+			setIcon(payload) {
+				actionCalls.setIcon.push(payload);
+			},
+			async setPopup(payload) {
+				actionCalls.setPopup.push(payload);
+			},
+			setTitle(payload) {
+				actionCalls.setTitle.push(payload);
+			},
+		},
+		i18n: {
+			getMessage() {
+				return "";
+			},
+		},
+		storage: {
+			local: createStorageArea(localStorage),
+			sync: createStorageArea(syncStorage),
+			session: createStorageArea(sessionStorage),
+			managed: createStorageArea(managedStorage),
+		},
+	};
+
+	globalThis.Sentry = {
+		init() {},
+		getCurrentHub() {
+			return {
+				getClient() {
+					return {
+						getOptions() {
+							return { enabled: true };
+						},
+					};
+				},
+			};
+		},
+		withScope(callback) {
+			callback({
+				setExtra() {},
+			});
+		},
+		captureException() {},
+		captureMessage() {},
+	};
+	globalThis.OffscreenCanvas = FakeOffscreenCanvas;
+	globalThis.createImageBitmap = async function() {
+		return { width: 16, height: 16 };
+	};
+	globalThis.fetch = async function(url) {
+		fetchCalls.push(url);
+		return {
+			async blob() {
+				return new Blob([""]);
+			},
+			async json() {
+				return { success: true };
+			},
+			async text() {
+				return "";
+			},
+		};
+	};
+
+	const { domainflagModule, parametersModule } = await loadModules();
+	domainflagModule.resetDomainflagStateForTests();
+	parametersModule.resetParametersForTests();
+
+	return {
+		df: domainflagModule.df,
+		actionCalls,
+		fetchCalls,
+		getTabCallCount() {
+			return tabCallIndex;
+		},
+		getSessionValue(key) {
+			return sessionStorage[key];
+		},
+		getActiveDomain() {
+			return parametersModule.api_domain;
+		},
+	};
+}
+
+test("isTabStillCurrent returns true for the expected URL", async function() {
+	const harness = await createHarness({
+		tabUrls: ["https://example.com/"],
+	});
+
+	const result = await harness.df.isTabStillCurrent(7, "https://example.com/");
+
+	assert.equal(result, true);
+	assert.equal(harness.getTabCallCount(), 1);
+});
+
+test("isTabStillCurrent returns false for a different URL", async function() {
+	const harness = await createHarness({
+		tabUrls: ["https://other.example/"],
+	});
+
+	const result = await harness.df.isTabStillCurrent(7, "https://example.com/");
+
+	assert.equal(result, false);
+	assert.equal(harness.getTabCallCount(), 1);
+});
+
+test("setFlag skips stale updates before icon preparation starts", async function() {
+	const harness = await createHarness({
+		tabUrls: ["https://other.example/"],
+	});
+
+	await harness.df.setFlag({
+		tab: 7,
+		url: "https://example.com/",
+		icon: "de",
+		title: "Germany",
+		popup: "popup.html",
+	});
+
+	assert.equal(harness.fetchCalls.length, 0);
+	assert.equal(harness.actionCalls.setIcon.length, 0);
+	assert.equal(harness.actionCalls.setPopup.length, 0);
+	assert.equal(harness.actionCalls.setTitle.length, 0);
+});
+
+test("setFlag skips stale updates if the tab changes during icon preparation", async function() {
+	const harness = await createHarness({
+		tabUrls: ["https://example.com/", "https://other.example/"],
+	});
+
+	await harness.df.setFlag({
+		tab: 7,
+		url: "https://example.com/",
+		icon: "de",
+		title: "Germany",
+		popup: "popup.html",
+	});
+
+	assert.equal(harness.fetchCalls.length, 1);
+	assert.equal(harness.actionCalls.setIcon.length, 0);
+	assert.equal(harness.actionCalls.setPopup.length, 0);
+	assert.equal(harness.actionCalls.setTitle.length, 0);
+});
+
+test("setFlag updates icon, popup and title when the tab still matches", async function() {
+	const harness = await createHarness({
+		tabUrls: ["https://example.com/", "https://example.com/"],
+	});
+
+	await harness.df.setFlag({
+		tab: 7,
+		url: "https://example.com/",
+		icon: "de",
+		title: "Germany",
+		popup: "popup.html",
+	});
+
+	assert.equal(harness.fetchCalls.length, 1);
+	assert.equal(harness.actionCalls.setIcon.length, 1);
+	assert.equal(harness.actionCalls.setPopup.length, 1);
+	assert.equal(harness.actionCalls.setTitle.length, 1);
+	assert.equal(harness.actionCalls.setPopup[0].tabId, 7);
+	assert.equal(harness.actionCalls.setPopup[0].popup, "popup.html");
+	assert.equal(harness.actionCalls.setTitle[0].tabId, 7);
+	assert.equal(harness.actionCalls.setTitle[0].title, "Germany");
+});
+
+test("handleFallback switches managed installations back to the upstream default", async function() {
+	const harness = await createHarness({
+		managedStorage: {
+			Server: "internal.example",
+		},
+		sessionStorage: {
+			Server: "internal.example",
+		},
+	});
+
+	const result = await harness.df.handleFallback();
+
+	assert.equal(result, "dfdata.bella.network");
+	assert.equal(harness.getSessionValue("Server"), "dfdata.bella.network");
+	assert.equal(harness.getActiveDomain(), "dfdata.bella.network");
+});
+
+test("handleFallback keeps the managed server when upstream fallback is disabled", async function() {
+	const harness = await createHarness({
+		managedStorage: {
+			Server: "internal.example",
+			DisableServerFallback: "true",
+		},
+		sessionStorage: {
+			Server: "internal.example",
+		},
+	});
+
+	const result = await harness.df.handleFallback();
+
+	assert.equal(result, "internal.example");
+	assert.equal(harness.getSessionValue("Server"), "internal.example");
+	assert.equal(harness.getActiveDomain(), "internal.example");
+});
