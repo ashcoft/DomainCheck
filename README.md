@@ -90,11 +90,9 @@ You have found a bug or have a suggestion for a feature, then please open an [Is
 
 Please help translate uDomainFlag into other languages!
 
-You can use [Weblate on weblate.bella.pm](https://weblate.bella.pm/engage/udomainflag/) to improve current translations or to add a new language to uDomainFlag!
+You can contribute translations on [GitHub](https://github.com/Thomas2500/uDomainFlag/tree/master/_locales) by adding a new folder with the corresponding language code (e.g. `fr` for French) and creating a `messages.json` file with the translated strings.
 
-[<img src="https://weblate.bella.pm/widgets/udomainflag/-/extension/287x66-black.png" valign="middle" />](https://weblate.bella.pm/engage/udomainflag/)
-
-Alternatively you can use the English (`en`) and German (`de`) language files as reference which are located within the [_locales](/_locales/) folder.
+Please use the English (`en`) or German (`de`) language files as reference for your translations, which are located within the [_locales](/_locales/) folder.
 
 ## Permissions required
 
