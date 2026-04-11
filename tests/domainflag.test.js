@@ -294,6 +294,52 @@ test("setFlag updates icon, popup and title when the tab still matches", async f
 	assert.equal(harness.actionCalls.setTitle[0].title, "Germany");
 });
 
+test("domainCountryLookupResultData falls back to an unknown icon when flag metadata is missing", async function() {
+	const harness = await createHarness({
+		tabUrls: ["https://example.com/", "https://example.com/"],
+	});
+
+	await harness.df.domainCountryLookupResultData({
+		lookup: {
+			tab: 7,
+			url: "https://example.com/",
+		},
+		request: {
+			success: true,
+		},
+	});
+
+	assert.equal(harness.fetchCalls.length, 1);
+	assert.equal(harness.fetchCalls[0], "images/special-flag/unknown.png");
+	assert.equal(harness.actionCalls.setIcon.length, 1);
+	assert.equal(harness.actionCalls.setTitle.length, 1);
+	assert.equal(harness.actionCalls.setTitle[0].title, "Unknown");
+});
+
+test("domainCountryLookupResultData uses the country name when shortcountry is missing", async function() {
+	const harness = await createHarness({
+		tabUrls: ["https://example.com/", "https://example.com/"],
+	});
+
+	await harness.df.domainCountryLookupResultData({
+		lookup: {
+			tab: 7,
+			url: "https://example.com/",
+		},
+		request: {
+			success: true,
+			country: "Germany",
+			shortcountry: " ",
+		},
+	});
+
+	assert.equal(harness.fetchCalls.length, 1);
+	assert.equal(harness.fetchCalls[0], "images/special-flag/unknown.png");
+	assert.equal(harness.actionCalls.setIcon.length, 1);
+	assert.equal(harness.actionCalls.setTitle.length, 1);
+	assert.equal(harness.actionCalls.setTitle[0].title, "Germany");
+});
+
 test("handleFallback switches managed installations back to the upstream default", async function() {
 	const harness = await createHarness({
 		managedStorage: {

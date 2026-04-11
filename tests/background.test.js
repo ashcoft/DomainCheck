@@ -46,9 +46,11 @@ async function createHarness({
 	sessionStorage = {},
 	windows = [],
 	countryLookupImplementation,
+	currentTime = 1_000,
 } = {}) {
 	const alarmState = { ...existingAlarms };
 	const listeners = {};
+	let now = currentTime;
 	const calls = {
 		alarmsGet: [],
 		alarmsCreate: [],
@@ -197,11 +199,18 @@ async function createHarness({
 		saveObjectInSessionStorage: async function(value) {
 			Object.assign(sessionStorage, value);
 		},
+		getNow() {
+			return now;
+		},
 	});
 
 	return {
+		backgroundCacheConfig: backgroundModule.backgroundCacheConfig,
 		calls,
 		listeners,
+		setNow(value) {
+			now = value;
+		},
 		sessionValues: sessionStorage,
 		async flush() {
 			await flushPromises();
@@ -265,6 +274,7 @@ test("response-started events persist IPs in session storage for later worker ru
 	const sessionStorage = {};
 	const harness = await createHarness({
 		sessionStorage,
+		currentTime: 12_345,
 	});
 
 	await harness.flush();
@@ -278,12 +288,16 @@ test("response-started events persist IPs in session storage for later worker ru
 	assert.equal(
 		JSON.stringify(sessionStorage.BackgroundIPCache),
 		JSON.stringify({
-			"example.com": "203.0.113.10",
+			"example.com": {
+				ip: "203.0.113.10",
+				updatedAt: 12_345,
+				lastAccessedAt: 12_345,
+			},
 		})
 	);
 });
 
-test("popup requests read the cached IP from session storage after a worker restart", async function() {
+test("popup requests read and normalize legacy cached IP entries after a worker restart", async function() {
 	const sessionStorage = {
 		BackgroundIPCache: {
 			"example.com": "203.0.113.10",
@@ -307,6 +321,111 @@ test("popup requests read the cached IP from session storage after a worker rest
 
 	assert.equal(keepChannelOpen, true);
 	assert.equal(responseValue, "203.0.113.10");
+	assert.equal(
+		JSON.stringify(sessionStorage.BackgroundIPCache),
+		JSON.stringify({
+			"example.com": {
+				ip: "203.0.113.10",
+				updatedAt: 1_000,
+				lastAccessedAt: 1_000,
+			},
+		})
+	);
+});
+
+test("cached IP entries expire after the TTL and are removed from session storage", async function() {
+	const configHarness = await createHarness();
+	const { ipCacheEntryTTLms } = configHarness.backgroundCacheConfig;
+	const sessionStorage = {
+		BackgroundIPCache: {
+			"example.com": {
+				ip: "203.0.113.10",
+				updatedAt: 0,
+				lastAccessedAt: 0,
+			},
+		},
+	};
+	const harness = await createHarness({
+		sessionStorage,
+		currentTime: ipCacheEntryTTLms + 1,
+	});
+
+	await harness.flush();
+
+	let responseValue = "not-set";
+	const keepChannelOpen = harness.listeners.onMessage(
+		{ type: "popup", url: "https://example.com/" },
+		{},
+		function(value) {
+			responseValue = value;
+		}
+	);
+	await harness.flush();
+
+	assert.equal(keepChannelOpen, true);
+	assert.equal(responseValue, undefined);
+	assert.equal(JSON.stringify(sessionStorage.BackgroundIPCache), JSON.stringify({}));
+});
+
+test("cached IP reads refresh the LRU access time after the touch interval", async function() {
+	const configHarness = await createHarness();
+	const { ipCacheTouchIntervalMs } = configHarness.backgroundCacheConfig;
+	const sessionStorage = {
+		BackgroundIPCache: {
+			"example.com": {
+				ip: "203.0.113.10",
+				updatedAt: 1_000,
+				lastAccessedAt: 1_000,
+			},
+		},
+	};
+	const harness = await createHarness({
+		sessionStorage,
+		currentTime: 1_000 + ipCacheTouchIntervalMs + 1,
+	});
+
+	await harness.flush();
+
+	let responseValue;
+	const keepChannelOpen = harness.listeners.onMessage(
+		{ type: "popup", url: "https://example.com/" },
+		{},
+		function(value) {
+			responseValue = value;
+		}
+	);
+	await harness.flush();
+
+	assert.equal(keepChannelOpen, true);
+	assert.equal(responseValue, "203.0.113.10");
+	assert.equal(sessionStorage.BackgroundIPCache["example.com"].lastAccessedAt, 1_000 + ipCacheTouchIntervalMs + 1);
+});
+
+test("cache eviction keeps only the most recently used entries up to the configured limit", async function() {
+	const configHarness = await createHarness();
+	const { ipCacheMaxEntries } = configHarness.backgroundCacheConfig;
+	const sessionStorage = {
+		BackgroundIPCache: {},
+	};
+
+	for (let index = 0; index <= ipCacheMaxEntries; index++) {
+		sessionStorage.BackgroundIPCache[`host-${index}.example`] = {
+			ip: `203.0.113.${index % 255}`,
+			updatedAt: 1_000 + index,
+			lastAccessedAt: 1_000 + index,
+		};
+	}
+
+	const harness = await createHarness({
+		sessionStorage,
+		currentTime: 2_000 + ipCacheMaxEntries,
+	});
+
+	await harness.flush();
+
+	assert.equal(Object.keys(sessionStorage.BackgroundIPCache).length, ipCacheMaxEntries);
+	assert.equal(Object.prototype.hasOwnProperty.call(sessionStorage.BackgroundIPCache, "host-0.example"), false);
+	assert.equal(Object.prototype.hasOwnProperty.call(sessionStorage.BackgroundIPCache, `host-${ipCacheMaxEntries}.example`), true);
 });
 
 test("parallel tab updates for the same tab and url share one active country lookup", async function() {
