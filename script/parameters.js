@@ -10,6 +10,7 @@ let companyManaged = false;
 // if the primary domain can't be reached, fall back to the fallback domain
 const api_protocol = "https";
 const api_domain_primary = "dfdata.bella.network";
+const api_domain_fallback = api_domain_primary;
 let api_domain = api_domain_primary;
 const api_path = "";
 

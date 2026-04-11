@@ -9,8 +9,9 @@ window.addEventListener('load', function () {
 
 async function writeContent(){
 	let currentDomain = await getAPIDomain();
-	if (currentDomain != api_domain_primary && currentDomain != api_domain_fallback) {
+	if (currentDomain != api_domain_primary) {
 		document.querySelector('.companymanaged').style.display = "inline";
 	}
+	// innerHTML is needed to render <br> as line breaks
 	document.querySelector('.offline_description').innerHTML = _("offline_description", [currentDomain]);
 }

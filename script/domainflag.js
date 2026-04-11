@@ -118,37 +118,36 @@ const df = {
 			method: 'GET',
 			cache: 'default',
 			headers: headers,
-		}).then(response => response.json(), df.processLastError).then((parsedData) => {
-			if (parsedData.success) {
-				let meta = { lookup: data, request: parsedData };
-				if (data.ip != null) {
-					meta.ip = data.ip;
-				}
+			}).then(response => response.json(), df.processLastError).then(async (parsedData) => {
+				if (parsedData.success) {
+					let meta = { lookup: data, request: parsedData };
+					if (data.ip != null) {
+						meta.ip = data.ip;
+					}
 
-				df.domainCountryLookupResultData(meta);
-			} else if (parsedData.success === false) {
-				let error = "uDomainFlag server was not able to resolve the country of the domain.\nPlease try again later.";
-				if (typeof parsedData.error !== "undefined" && parsedData.error !== "" && parsedData.error != "doh: all query failed") {
-					error = parsedData.error;
+					df.domainCountryLookupResultData(meta);
+				} else if (parsedData.success === false) {
+					let error = "uDomainFlag server was not able to resolve the country of the domain.\nPlease try again later.";
+					if (typeof parsedData.error !== "undefined" && parsedData.error !== "" && parsedData.error != "doh: all query failed") {
+						error = parsedData.error;
+					}
+					df.setFlag({ tab: data.tab, url: data.url, icon: "images/special-flag/unknown.png", title: error, popup: 'special.html' });
+				} else {
+					df.setFlag({ tab: data.tab, url: data.url, icon: "images/fugue/network-status-busy.png", title: "uDomainFlag server not reachable", popup: 'offline.html' });
+					Sentry.withScope(function (scope) {
+						scope.setExtra("domain", domain);
+						scope.setExtra("response", response);
+						Sentry.captureMessage("no success response from backend");
+					});
+					await df.handleFallback();
+					return;
 				}
-				df.setFlag({ tab: data.tab, url: data.url, icon: "images/special-flag/unknown.png", title: error, popup: 'special.html' });
-			} else {
+			}).catch(async (result) => {
+				console.log(result);
 				df.setFlag({ tab: data.tab, url: data.url, icon: "images/fugue/network-status-busy.png", title: "uDomainFlag server not reachable", popup: 'offline.html' });
-				Sentry.withScope(function (scope) {
-					scope.setExtra("domain", domain);
-					scope.setExtra("response", response);
-					Sentry.captureMessage("no success response from backend");
-				});
-				api_domain = df.handleFallback();
-				return;
-			}
-		}).catch((result) => {
-			console.log(result);
-			df.setFlag({ tab: data.tab, url: data.url, icon: "images/fugue/network-status-busy.png", title: "uDomainFlag server not reachable", popup: 'offline.html' });
-			api_domain = df.handleFallback();
-			console.warn(api_domain);
-		});
-	},
+				console.warn(await df.handleFallback());
+			});
+		},
 
 	domainCountryLookupResultData: function(data){
 		// Check if data is correct
@@ -270,16 +269,16 @@ const df = {
 			method: 'GET',
 			cache: 'default',
 			headers: headers,
-		}).then(response => response.json()).then((parsedData) => {
-			if (typeof parsedData.success !== "undefined") {
-				return callback(parsedData);
-			}
-		}).catch((result) => {
-			console.warn(result);
-			api_domain = df.handleFallback();
-			return callback({ success: false, error: "uDomainFlag server not reachable", catch: result });
-		});
-	},
+			}).then(response => response.json()).then((parsedData) => {
+				if (typeof parsedData.success !== "undefined") {
+					return callback(parsedData);
+				}
+			}).catch(async (result) => {
+				console.warn(result);
+				await df.handleFallback();
+				return callback({ success: false, error: "uDomainFlag server not reachable", catch: result });
+			});
+		},
 
 	// setFlag sets a flag icon and title for a tab
 	setFlag: async function(data) {
@@ -650,68 +649,51 @@ const df = {
 		chrome.runtime.reload();
 	},
 
+	setAPIDomain: async function(domain) {
+		if (typeof domain !== "string" || domain === "") {
+			domain = api_domain_primary;
+		}
+
+		api_domain = domain;
+		await saveObjectInSessionStorage({ Server: domain });
+		return domain;
+	},
+
 	getAPIDomain: async function() {
 		// get API domain from session storage
 		let apiDomain = await getObjectFromSessionStorage("Server");
 		if (typeof apiDomain !== "undefined" && apiDomain !== null && apiDomain !== "") {
-			saveObjectInSessionStorage({Server: apiDomain});
+			api_domain = apiDomain;
 			return apiDomain;
 		}
 
 		// session storage is not filled, determine if managed storage set a domain
 		let managedDomain = await getObjectFromManagedStorage("Server");
 		if (typeof managedDomain !== "undefined" && managedDomain !== null && managedDomain !== "") {
-			saveObjectInSessionStorage({Server: managedDomain});
-			return managedDomain;
+			return df.setAPIDomain(managedDomain);
 		}
 
 		// managed storage is not filled, use default domain
-		saveObjectInSessionStorage({Server: api_domain_primary});
-		return api_domain_primary;
+		return df.setAPIDomain(api_domain_primary);
 	},
 
 	handleFallback: async function(){
-		// get from managed storage the configured server - if set
-		let server = await getObjectFromManagedStorage("Server");
-		if (server !== undefined && server !== null && server !== "") {
-			// determine if fallback is enabled
-			// and use fallback address if target can't be reached
-			let fallback = await getObjectFromManagedStorage("DisableServerFallback");
-			if (fallback !== undefined && fallback !== null && (fallback === true || fallback === "true" || fallback === "1")) {
-				console.log("Setting "+server);
-				saveObjectInSessionStorage({Server: server});
-				return server;
+		let managedServer = await getObjectFromManagedStorage("Server");
+		let fallbackDisabled = await getObjectFromManagedStorage("DisableServerFallback");
+		let fallbackLocked = fallbackDisabled === true || fallbackDisabled === "true" || fallbackDisabled === "1";
+
+		if (managedServer !== undefined && managedServer !== null && managedServer !== "") {
+			if (fallbackLocked) {
+				console.log("Keeping managed server " + managedServer);
+				return df.setAPIDomain(managedServer);
 			}
-			console.log("Setting " + api_domain_primary);
-			saveObjectInSessionStorage({Server: api_domain_primary});
-			return api_domain_primary;
+
+			console.log("Falling back to " + api_domain_fallback);
+			return df.setAPIDomain(api_domain_fallback);
 		}
 
-		// get currently used server from session storage
-		server = await getObjectFromSessionStorage("Server");
-		if (server !== undefined && server !== null && server !== "" && server != api_domain_primary) {
-			console.log("Setting " + api_domain_secondary);
-			saveObjectInSessionStorage({Server: api_domain_secondary});
-			return api_domain_secondary;
-		}
-
-		/*
-		if (typeof localStorage["policyDisableServerFallback"] !== "undefined" && localStorage["policyDisableServerFallback"] == "true") {
-			if (typeof localStorage["policyServer"] !== "undefined") {
-				if (localStorage["policyServer"] != "" && localStorage["policyServer"] != "false") {
-					return localStorage["policyServer"];
-				}
-			}
-			return api_domain_primary;
-		}
-		if (typeof localStorage["policyServer"] !== "undefined" && localStorage["policyServer"] != "" && localStorage["policyServer"] != "false") {
-			if (api_domain == localStorage["policyServer"]) {
-				return api_domain_primary;
-			}
-		}
-		*/
-		console.warn("fallback called");
-		return api_domain_fallback;
+		console.log("Keeping default server " + api_domain_fallback);
+		return df.setAPIDomain(api_domain_fallback);
 	},
 
 	getServerFeatureFlag: async function(flagLabel, callback){
@@ -781,16 +763,16 @@ const df = {
 				},
 			})
 			.then((response) => response.text())
-			.then((data) => {
-				// target seems to be reachable
-				// check if response is correct and matches the expected response
-				if (data.trim() == "Be kind whenever possible. It is always possible.") {
-					// set serverToCheck as new server
-					saveObjectInSessionStorage({Server: serverToCheck});
-				} else {
-					// target is not reachable, do not try to recover
-				}
-				console.log('Success:', data);
+				.then(async (data) => {
+					// target seems to be reachable
+					// check if response is correct and matches the expected response
+					if (data.trim() == "Be kind whenever possible. It is always possible.") {
+						// set serverToCheck as new server
+						await df.setAPIDomain(serverToCheck);
+					} else {
+						// target is not reachable, do not try to recover
+					}
+					console.log('Success:', data);
 			})
 			.catch((error) => {
 				// target is not reachable, do not try to recover
