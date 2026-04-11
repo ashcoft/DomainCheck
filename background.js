@@ -9,62 +9,173 @@ if (typeof getObjectFromLocalStorage === "undefined") {
 	importScripts('script/sentry.min.js', 'script/storage.js', 'script/country.js', 'script/parameters.js', 'script/domainflag.js');
 }
 
-// set up scheduler to perform some background tasks
-chrome.alarms.onAlarm.addListener(df.schedule);
-chrome.alarms.create("reachableCheck", { periodInMinutes: 5.0 });
-chrome.alarms.create("companySync", {
-	periodInMinutes: 15.0,
-	delayInMinutes: 0.5
-});
+const ipCacheStorageKey = "BackgroundIPCache";
+const runtimeAlarms = {
+	reachableCheck: { periodInMinutes: 5.0 },
+	companySync: {
+		periodInMinutes: 15.0,
+		delayInMinutes: 0.5
+	}
+};
+
+let ipCache = null;
+let runtimeInitialization = null;
+
+async function loadIPCache() {
+	if (ipCache !== null) {
+		return ipCache;
+	}
+
+	let storedCache = await getObjectFromSessionStorage(ipCacheStorageKey);
+	if (typeof storedCache === "object" && storedCache !== null) {
+		ipCache = storedCache;
+	} else {
+		ipCache = {};
+	}
+
+	return ipCache;
+}
+
+async function getCachedIP(domain) {
+	if (typeof domain !== "string" || domain === "") {
+		return undefined;
+	}
+
+	let cache = await loadIPCache();
+	return cache[domain];
+}
+
+async function cacheIP(domain, ip) {
+	if (typeof domain !== "string" || domain === "" || typeof ip !== "string" || ip === "") {
+		return;
+	}
+
+	let cache = await loadIPCache();
+	cache[domain] = ip;
+	await saveObjectInSessionStorage({ [ipCacheStorageKey]: cache });
+}
+
+async function ensureAlarm(name, config) {
+	await new Promise((resolve) => {
+		chrome.alarms.get(name, function (alarm) {
+			if (chrome.runtime.lastError) {
+				df.processLastError();
+				resolve();
+				return;
+			}
+
+			if (typeof alarm === "undefined") {
+				chrome.alarms.create(name, config);
+			}
+			resolve();
+		});
+	});
+	df.processLastError();
+}
+
+async function ensureRuntimeAlarms() {
+	for (const [name, config] of Object.entries(runtimeAlarms)) {
+		await ensureAlarm(name, config);
+	}
+}
+
+async function initializeRuntimeState() {
+	await Promise.all([
+		df.checkUUID(),
+		df.getAPIDomain(),
+		loadIPCache()
+	]);
+}
+
+async function ensureServiceWorkerReady() {
+	if (runtimeInitialization !== null) {
+		return runtimeInitialization;
+	}
+
+	runtimeInitialization = (async function() {
+		await ensureRuntimeAlarms();
+		await initializeRuntimeState();
+	})();
+
+	try {
+		await runtimeInitialization;
+	}
+	finally {
+		runtimeInitialization = null;
+	}
+}
 
 // set up listener on application installation, update and startup
-chrome.runtime.onInstalled.addListener(df.handleOnInstalled);
+chrome.alarms.onAlarm.addListener(df.schedule);
+chrome.runtime.onInstalled.addListener(async function(details) {
+	df.handleOnInstalled(details);
+	await ensureServiceWorkerReady();
+	await restoreAllTabs();
+});
 chrome.runtime.onUpdateAvailable.addListener(df.handleUpdate);
-chrome.runtime.onStartup.addListener(function() {
-	// check if UUID is set, if not generate one and set it to sync storage
-	df.checkUUID();
-
-	// Prefill session cache with used API domain
-	df.getAPIDomain();
+chrome.runtime.onStartup.addListener(async function() {
+	await ensureServiceWorkerReady();
+	await restoreAllTabs();
 });
 
-let ipCache = {};
+void ensureServiceWorkerReady();
 
 // Fire if page is loading
-chrome.tabs.onUpdated.addListener(function (tabId, changeInfo, tab) {
+chrome.tabs.onUpdated.addListener(async function (tabId, changeInfo, tab) {
 	// request is being made
-	if (changeInfo.status == 'loading') {
+	if (changeInfo.status == 'loading' && typeof tab === "object" && tab !== null && typeof tab.url === "string" && tab.url !== "") {
 		let data = { tab: tabId, url: tab.url };
 		// get domain from url
 		let domain = df.parseUrl(tab.url);
 		// check if domain is in cache
-		if (typeof ipCache[domain] !== "undefined") {
-			data.ip = ipCache[domain];
+		let cachedIP = await getCachedIP(domain);
+		if (typeof cachedIP !== "undefined") {
+			data.ip = cachedIP;
 		}
 		df.countryLookup(data);
 	}
 });
 
-// extension started, request data for every open tab to show correct icon
-// if not done, user has to navigate to a new page for icon to be loaded
-chrome.windows.getAll({ populate: true }, function (windows) {
-	allTabs(windows);
-});
-function allTabs(windows) {
+// Restore icons for existing tabs when the extension is installed, updated or the browser starts.
+function restoreTabs(windows) {
 	for (let windowID = 0; windowID < windows.length; windowID++) {
 		for (let tab = 0; tab < windows[windowID].tabs.length; tab++) {
-			df.countryLookup({ tab: windows[windowID].tabs[tab].id, url: windows[windowID].tabs[tab].url });
+			let currentTab = windows[windowID].tabs[tab];
+			if (typeof currentTab.url === "string" && currentTab.url !== "") {
+				df.countryLookup({ tab: currentTab.id, url: currentTab.url });
+			}
 		}
 	}
 	df.processLastError();
 }
 
+async function restoreAllTabs() {
+	await new Promise((resolve) => {
+		chrome.windows.getAll({ populate: true }, function (windows) {
+			if (chrome.runtime.lastError) {
+				df.processLastError();
+				resolve();
+				return;
+			}
+
+			restoreTabs(windows);
+			resolve();
+		});
+	});
+}
+
 chrome.runtime.onMessage.addListener(function (message, sender, senderResponse) {
 	switch (message.type) {
-		case "popup":
+		case "popup": {
 			// parse url to a domain
 			let domain = df.parseUrl(message.url);
-			return senderResponse(ipCache[domain])
+			getCachedIP(domain).then(function (value) {
+				senderResponse(value);
+			}).catch(function () {
+				senderResponse(undefined);
+			});
+			return true;
+		}
 		default:
 			Sentry.withScope(function (scope) {
 				scope.setExtra("request", message);
@@ -89,7 +200,7 @@ chrome.webRequest.onResponseStarted.addListener(function (ret) {
 
 	// parse url to a domain and add it to ipCache
 	let domain = df.parseUrl(ret.url);
-	ipCache[domain] = ret.ip;
+	void cacheIP(domain, ret.ip);
 
 	// start lookup
 	df.countryLookup({ tab: ret.tabId, url: ret.url, ip: ret.ip });
