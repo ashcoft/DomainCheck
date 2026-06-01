@@ -12,8 +12,7 @@
 		"lint:fix": "eslint --fix script/",
 		"release": "changesets version && git diff --exit-code",
 		"pub": "changesets publish",
-		"build:chromium": "mkdir -p dist && tar -cvzf dist/udomainflag.tar.gz platform/chromium",
-		"build": "npm run build:chromium && npm run build:firefox"
+		"build": "mkdir -p dist && tar -cvzf dist/udomainflag.tar.gz platform/chromium"
 	},
 	"devDependencies": {
 		"@changesets/changelog-github": "^0.7.0",
