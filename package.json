@@ -1,6 +1,6 @@
 {
 	"name": "udomainflag",
-	"version": "1.0.0",
+	"version": "2.4.0",
 	"private": true,
 	"type": "module",
 	"description": "Domain flag extension showing country flags and HTTP protocol indicators",
