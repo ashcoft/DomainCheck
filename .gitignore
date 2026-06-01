@@ -10,6 +10,3 @@ $RECYCLE.BIN/
 *.crdownload
 .vscode/
 node_modules/
-package-lock.json
-.changeset/*.md
-!.changeset/*.md
