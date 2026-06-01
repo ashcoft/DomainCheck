@@ -9,3 +9,5 @@ $RECYCLE.BIN/
 .dropbox.attr
 *.crdownload
 .vscode/
+node_modules/
+package-lock.json

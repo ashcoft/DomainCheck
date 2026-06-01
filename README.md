@@ -21,6 +21,7 @@ Alternatively you can manually install the extension by importing it on the brow
 ## Features
 
 - Country flag on website visit
+- HTTP protocol indicator (HTTP/1.0, HTTP/1.1, HTTP/2, HTTP/3, QUIC, SPDY)
 - Special icon for internal or special resources
 - Always up2date data using online lookups
 - Available for most browsers

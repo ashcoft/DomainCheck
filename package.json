@@ -1,8 +1,24 @@
 {
 	"name": "udomainflag",
+	"version": "2.3.0",
 	"private": true,
 	"type": "module",
+	"description": "Domain flag extension showing country flags and HTTP protocol indicators",
+	"author": "Thomas Bella",
+	"license": "MPL-2.0",
 	"scripts": {
-		"test": "node --test"
+		"test": "node --test",
+		"lint": "eslint script/",
+		"lint:fix": "eslint --fix script/"
+	},
+	"devDependencies": {
+		"@eslint/js": "^9.0.0",
+		"eslint": "^9.0.0",
+		"globals": "^15.0.0",
+		"typescript": "^5.4.0",
+		"typescript-eslint": "^8.0.0"
+	},
+	"engines": {
+		"node": ">=18.0.0"
 	}
 }
