@@ -10,3 +10,4 @@ $RECYCLE.BIN/
 *.crdownload
 .vscode/
 node_modules/
+dist/
