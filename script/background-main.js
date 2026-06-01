@@ -3,10 +3,13 @@
  * file, You can obtain one at https://mozilla.org/MPL/2.0/. */
 
 import { df as defaultDf } from "./domainflag.js";
+import { httpIndicator } from "./http-indicator.js";
 import {
 	getObjectFromSessionStorage as defaultGetObjectFromSessionStorage,
 	saveObjectInSessionStorage as defaultSaveObjectInSessionStorage,
 } from "./storage.js";
+
+const httpProtocolIcons = httpIndicator.icons;
 
 const ipCacheStorageKey = "BackgroundIPCache";
 const ipCacheEntryTTLms = 6 * 60 * 60 * 1000;
@@ -339,6 +342,30 @@ function registerListeners(deps) {
 	});
 
 	deps.chrome.runtime.onMessage.addListener(function(message, sender, senderResponse) {
+		const tabId = sender.tab?.id;
+
+		// Handle HTTP protocol message from content script (http-indicator)
+		if (typeof message === "string" && tabId != null) {
+			const { key, label } = httpIndicator.parseProtocol(message);
+			const iconUrl = httpProtocolIcons[key] || httpProtocolIcons.default;
+			const isDataUrl = iconUrl.startsWith("data:");
+
+			if (isDataUrl) {
+				deps.chrome.action.setIcon({ path: iconUrl, tabId });
+			}
+			else {
+				// For extension URLs, we need to use ImageData
+				// The icon will be set via the country lookup result
+				// Store protocol info for this tab
+				if (!deps.httpProtocolCache) {
+					deps.httpProtocolCache = new Map();
+				}
+				deps.httpProtocolCache.set(tabId, { key, label, icon: iconUrl });
+			}
+			deps.chrome.action.setTitle({ title: label, tabId });
+			return false;
+		}
+
 		switch (message.type) {
 			case "popup": {
 				const domain = deps.df.parseUrl(message.url);
@@ -351,7 +378,7 @@ function registerListeners(deps) {
 							deps.getNow
 						));
 					}
-					catch (error) {
+					catch {
 						senderResponse(undefined);
 					}
 				})();
