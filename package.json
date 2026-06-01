@@ -9,9 +9,13 @@
 	"scripts": {
 		"test": "node --test",
 		"lint": "eslint script/",
-		"lint:fix": "eslint --fix script/"
+		"lint:fix": "eslint --fix script/",
+		"release": "changesets version && git diff --exit-code",
+		"pub": "changesets publish"
 	},
 	"devDependencies": {
+		"@changesets/changelog-github": "^0.7.0",
+		"@changesets/cli": "^2.31.0",
 		"@eslint/js": "^9.0.0",
 		"eslint": "^9.0.0",
 		"globals": "^15.0.0",
