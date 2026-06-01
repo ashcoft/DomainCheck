@@ -11,7 +11,8 @@
 		"lint": "eslint script/",
 		"lint:fix": "eslint --fix script/",
 		"release": "changesets version && git diff --exit-code",
-		"pub": "changesets publish"
+		"pub": "changesets publish",
+		"build": "mkdir -p dist && tar -cvzf dist/udomainflag.tar.gz platform/chromium"
 	},
 	"devDependencies": {
 		"@changesets/changelog-github": "^0.7.0",
