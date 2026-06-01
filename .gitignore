@@ -11,3 +11,5 @@ $RECYCLE.BIN/
 .vscode/
 node_modules/
 package-lock.json
+.changeset/*.md
+!.changeset/*.md
