@@ -1,11 +1,12 @@
 # udomainflag
 
-## 1.0.0
+## 2.4.0
 
-### Major Changes
+### Minor Changes
 
-- Initial v1.0.0 release
-  - Add HTTP protocol indicator feature (HTTP/1, HTTP/2, HTTP/3, QUIC, SPDY)
-  - Browser extension with country flag display for domains
-  - Multi-platform support (Chromium, Firefox)
-  - Changesets version management setup
+- Add HTTP protocol indicator feature (HTTP/1, HTTP/2, HTTP/3, QUIC, SPDY)
+- Integration from pd4d10/http-indicator
+
+### Breaking Changes
+
+- Refactored to Chromium-only extension (removed Firefox support)
