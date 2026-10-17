@@ -9,9 +9,10 @@
 		process.exit(1);
 	}
 
-	// The release version comes from semantic-release, which only ever produces
-	// plain semver, but reject anything else so it cannot end up in these files.
-	if (!/^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/.test(version)) {
+	// semantic-release only produces plain release versions on this branch, and
+	// the Chromium manifest rejects anything but dotted integers, so require
+	// exactly that rather than accepting a prerelease suffix.
+	if (!/^\d+\.\d+\.\d+$/.test(version)) {
 		console.error(`Refusing to write invalid version: ${version}`);
 		process.exit(1);
 	}

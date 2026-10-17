@@ -64,6 +64,11 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      # The branch-head checkout above may differ from the commit the test job
+      # verified, so test the exact revision that is about to be released.
+      - name: Run tests
+        run: npm test
+
       - name: Configure git author
         run: |
           git config user.name "github-actions[bot]"
