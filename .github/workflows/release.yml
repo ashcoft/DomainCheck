@@ -8,9 +8,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write
-  issues: write
-  pull-requests: write
+  contents: read
 
 jobs:
   # Run tests on every push and pull request
@@ -39,6 +37,14 @@ jobs:
     runs-on: ubuntu-latest
     needs: test
     if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+    # Serialise releases: two quick pushes must not race on the same tag.
+    concurrency:
+      group: semantic-release
+      cancel-in-progress: false
+    permissions:
+      contents: write
+      issues: write
+      pull-requests: write
     steps:
       - name: Checkout repository
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
@@ -63,6 +69,6 @@ jobs:
       # semantic-release bumps the version, builds dist/udomainflag.tar.gz and
       # then attaches that archive to the GitHub release.
       - name: Release
-        run: npx semantic-release
+        run: npm run release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

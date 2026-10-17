@@ -29,7 +29,7 @@ export default [
 		},
 	},
 	{
-		files: ["tools/**/*.js"],
+		files: ["tools/**/*.{js,mjs}"],
 		languageOptions: {
 			ecmaVersion: 2022,
 			sourceType: "module",

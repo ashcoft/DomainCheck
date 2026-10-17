@@ -12,7 +12,7 @@
 		[
 			"@semantic-release/exec",
 			{
-				"prepareCmd": "node tools/set-version.js ${nextRelease.version} && npm run build"
+				"prepareCmd": "node tools/set-version.mjs ${nextRelease.version} && npm run build"
 			}
 		],
 		[
