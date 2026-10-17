@@ -4,9 +4,12 @@
 
 import { df, _ } from "./domainflag.js";
 import { applyTranslations } from "./lang.js";
+import { buildLookupUrl } from "./lookup.js";
 import { lookup_domain, lookup_protocol, parametersReady } from "./parameters.js";
 
 const chrome = globalThis.chrome;
+
+const lookupBaseUrl = `${lookup_protocol}://${lookup_domain}/`;
 
 function getElement(selector) {
 	return document.querySelector(selector);
@@ -126,9 +129,8 @@ function writeResolveData(responseLookupData, metadata) {
 	writePrimaryIp(selectedEntry.ip, selectedEntry.hostname);
 	renderIpList(responseLookupData.ips);
 
-	const currentIp = getElement(".ip a").textContent;
-	if (currentIp !== "unknown" && currentIp !== "") {
-		getElement(".ip a").href = `${lookup_protocol}://${lookup_domain}/ip/${currentIp}`;
+	if (selectedEntry.ip !== "unknown" && selectedEntry.ip !== "") {
+		getElement(".ip a").href = buildLookupUrl(lookupBaseUrl, "ip", selectedEntry.ip);
 	}
 }
 
@@ -137,7 +139,7 @@ function writeLocationData(responseLookupData) {
 		return;
 	}
 
-	getElement(".infolink a").href = `${lookup_protocol}://${lookup_domain}/ip/${responseLookupData.query}`;
+	getElement(".infolink a").href = buildLookupUrl(lookupBaseUrl, "ip", responseLookupData.query);
 	getElement(".text-more").textContent = _("more_info");
 	getElement(".country").textContent = responseLookupData.country;
 
@@ -161,7 +163,7 @@ function writeAsnData(response) {
 	}
 
 	getElement(".asn a").textContent = `AS${response.asn}`;
-	getElement(".asn a").href = `${lookup_protocol}://${lookup_domain}/asn/${response.asn}`;
+	getElement(".asn a").href = buildLookupUrl(lookupBaseUrl, "asn", response.asn);
 	getElement(".isp").textContent = response.description;
 	removeLoader(".asn");
 	removeLoader(".isp");
