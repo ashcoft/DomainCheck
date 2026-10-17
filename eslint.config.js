@@ -29,10 +29,10 @@ export default [
 		},
 	},
 	{
-		files: ["tools/**/*.{js,mjs}"],
+		files: ["tools/**/*.cjs"],
 		languageOptions: {
 			ecmaVersion: 2022,
-			sourceType: "module",
+			sourceType: "commonjs",
 			globals: {
 				...globals.node,
 			},

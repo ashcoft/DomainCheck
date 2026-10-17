@@ -1,8 +1,8 @@
-import { readFileSync, writeFileSync } from "node:fs";
+const { readFileSync, writeFileSync } = require("node:fs");
 
 const version = process.argv[2];
 if (!version) {
-	console.error("Usage: node tools/set-version.js <version>");
+	console.error("Usage: node tools/set-version.cjs <version>");
 	process.exit(1);
 }
 
