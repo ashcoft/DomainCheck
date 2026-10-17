@@ -4,8 +4,7 @@
 
 import { df, _ } from "./domainflag.js";
 import { applyTranslations } from "./lang.js";
-import { buildLookupUrl } from "./lookup.js";
-import { lookup_domain, lookup_protocol, parametersReady } from "./parameters.js";
+import { buildLookupUrl, lookup_domain, lookup_protocol, parametersReady } from "./parameters.js";
 
 const chrome = globalThis.chrome;
 

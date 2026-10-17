@@ -612,3 +612,69 @@ test("countryLookup reuses a fresh cached backend result for the same domain and
 	assert.equal(countCountryFetches(harness.fetchCalls), 1, JSON.stringify(harness.fetchCalls));
 	assert.equal(harness.actionCalls.setIcon.length, 2);
 });
+
+test("buildLookupUrl keeps a plain IPv4 address intact", async function() {
+	const { parametersModule } = await loadModules();
+
+	assert.equal(
+		parametersModule.buildLookupUrl("https://domainflag.bella.network/", "ip", "8.8.8.8"),
+		"https://domainflag.bella.network/ip/8.8.8.8",
+	);
+});
+
+test("buildLookupUrl percent-encodes IPv6 colons", async function() {
+	const { parametersModule } = await loadModules();
+
+	assert.equal(
+		parametersModule.buildLookupUrl("https://domainflag.bella.network/", "ip", "2001:db8::1"),
+		"https://domainflag.bella.network/ip/2001%3Adb8%3A%3A1",
+	);
+});
+
+test("buildLookupUrl cannot escape the path segment", async function() {
+	const { parametersModule } = await loadModules();
+	const url = new URL(parametersModule.buildLookupUrl("https://domainflag.bella.network/", "ip", "1.2.3.4/../../evil"));
+
+	assert.equal(url.pathname, "/ip/1.2.3.4%2F..%2F..%2Fevil");
+	assert.equal(url.origin, "https://domainflag.bella.network");
+});
+
+test("buildLookupUrl cannot inject a query or fragment", async function() {
+	const { parametersModule } = await loadModules();
+	const queryUrl = new URL(parametersModule.buildLookupUrl("https://domainflag.bella.network/", "ip", "8.8.8.8?redirect=https://evil.example"));
+	const fragmentUrl = new URL(parametersModule.buildLookupUrl("https://domainflag.bella.network/", "ip", "8.8.8.8#fragment"));
+
+	assert.equal(queryUrl.search, "");
+	assert.equal(queryUrl.hash, "");
+	assert.equal(fragmentUrl.hash, "");
+	assert.equal(fragmentUrl.pathname, "/ip/8.8.8.8%23fragment");
+});
+
+test("buildLookupUrl cannot switch to another scheme or host", async function() {
+	const { parametersModule } = await loadModules();
+
+	for (const value of ["javascript:alert(1)", "//evil.example/ip/1.2.3.4", "https://evil.example/"]) {
+		const url = new URL(parametersModule.buildLookupUrl("https://domainflag.bella.network/", "ip", value));
+
+		assert.equal(url.protocol, "https:");
+		assert.equal(url.host, "domainflag.bella.network");
+	}
+});
+
+test("buildLookupUrl escapes characters that would break out of an HTML attribute", async function() {
+	const { parametersModule } = await loadModules();
+	const url = parametersModule.buildLookupUrl("https://domainflag.bella.network/", "ip", "\"onmouseover=\"alert(1)");
+
+	assert.ok(!url.includes("\""));
+	assert.ok(!url.includes("<"));
+	assert.ok(!url.includes(">"));
+});
+
+test("buildLookupUrl handles the ASN path", async function() {
+	const { parametersModule } = await loadModules();
+
+	assert.equal(
+		parametersModule.buildLookupUrl("https://domainflag.bella.network/", "asn", "13335"),
+		"https://domainflag.bella.network/asn/13335",
+	);
+});
