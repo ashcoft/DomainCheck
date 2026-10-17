@@ -68,9 +68,10 @@ Because the commits landing on `master` are what get analyzed, the squash commit
 
 | Commit prefix | Release |
 | --- | --- |
-| `fix:`, `perf:`, `revert:` | patch |
+| `fix:`, `perf:` | patch |
+| `revert:` (with a `This reverts commit …` body) | patch |
 | `feat:` | minor |
-| `feat!:` or `BREAKING CHANGE:` | major |
+| any type with `!` (e.g. `feat!:`) or a `BREAKING CHANGE:` footer | major |
 | `chore:`, `docs:`, `ci:`, `refactor:`, `test:`, `build:`, `style:` | no release |
 
 ## Webpage

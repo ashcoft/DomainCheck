@@ -1,4 +1,3 @@
-#!/usr/bin/env node
 import { readFileSync, writeFileSync } from "node:fs";
 
 const version = process.argv[2];
