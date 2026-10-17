@@ -51,6 +51,9 @@ jobs:
         with:
           # semantic-release walks the whole history to find the last release.
           fetch-depth: 0
+          # A run queued behind another release must start from the current
+          # branch head, not the commit that originally triggered it.
+          ref: ${{ github.ref_name }}
 
       - name: Setup Node.js
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020

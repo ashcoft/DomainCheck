@@ -16,18 +16,26 @@
 		process.exit(1);
 	}
 
-	// Only the first version field is bumped. Every other "version" entry in the
-	// lockfile belongs to a dependency and must stay untouched.
-	function replaceRootVersion(raw) {
-		const pattern = /(^\s*"version":\s*")[^"]*(")/m;
-		if (!pattern.test(raw)) {
-			throw new Error("No version field found");
-		}
-		return raw.replace(pattern, `$1${version}$2`);
-	}
+	// package.json is parsed and re-serialised; its layout round-trips exactly.
+	const pkg = JSON.parse(readFileSync("package.json", "utf8"));
+	pkg.version = version;
+	writeFileSync("package.json", `${JSON.stringify(pkg, null, "\t")}\n`);
 
-	// The packaged extension reports its own version, so it must match the release.
-	for (const file of ["package.json", "package-lock.json", "platform/chromium/manifest.json"]) {
-		writeFileSync(file, replaceRootVersion(readFileSync(file, "utf8")));
+	// The lockfile holds two project versions: the top-level one and the root
+	// entry under "packages". Only those two are updated; every other version
+	// belongs to a dependency and must stay untouched.
+	const lock = JSON.parse(readFileSync("package-lock.json", "utf8"));
+	lock.version = version;
+	lock.packages[""].version = version;
+	writeFileSync("package-lock.json", `${JSON.stringify(lock, null, "\t")}\n`);
+
+	// The manifest keeps hand-written blank lines between sections, so replace
+	// only the version value instead of re-serialising the whole file.
+	const manifestPath = "platform/chromium/manifest.json";
+	const manifest = readFileSync(manifestPath, "utf8");
+	const versionField = /("version"\s*:\s*")[^"]*(")/;
+	if (!versionField.test(manifest)) {
+		throw new Error(`No version field found in ${manifestPath}`);
 	}
+	writeFileSync(manifestPath, manifest.replace(versionField, `$1${version}$2`));
 })();
