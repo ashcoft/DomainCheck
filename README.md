@@ -62,6 +62,18 @@ More details on all available settings and how to configure these can be found o
 
 A list of all releases including changelog can be found at [Releases](https://github.com/ashcoft/DomainCheck/releases).
 
+Releases are automated with [semantic-release](https://semantic-release.gitbook.io/). Every push to `master` is analyzed and, when the commits call for it, a new version is tagged, `CHANGELOG.md` is updated, and the extension package is attached to the release. The version in `package.json` and `platform/chromium/manifest.json` is bumped automatically.
+
+Because the commits landing on `master` are what get analyzed, the squash commit or merge commit must carry a typed prefix. A plain merge commit such as `Merge pull request #12 from ...` is not a release trigger, so use a Conventional Commit PR title when squash merging.
+
+| Commit prefix | Release |
+| --- | --- |
+| `fix:`, `perf:` | patch |
+| `revert:` (with a `This reverts commit …` body) | patch |
+| `feat:` | minor |
+| any type with `!` (e.g. `feat!:`) or a `BREAKING CHANGE:` footer | major |
+| `chore:`, `docs:`, `ci:`, `refactor:`, `test:`, `build:`, `style:` | no release |
+
 ## Webpage
 
 uDomainFlag is also available as a website at [domainflag.bella.network](http://domainflag.bella.network/?ref=https://github.com/ashcoft/DomainCheck) with some additional information. This page is opened when "additional information" is clicked within the extension.
