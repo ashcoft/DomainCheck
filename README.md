@@ -62,6 +62,15 @@ More details on all available settings and how to configure these can be found o
 
 A list of all releases including changelog can be found at [Releases](https://github.com/ashcoft/DomainCheck/releases).
 
+Releases are automated with [semantic-release](https://semantic-release.gitbook.io/). Every push to `master` is analyzed and, when the commits call for it, a new version is tagged, `CHANGELOG.md` is updated, and the extension package is attached to the release. The version in `package.json` and `platform/chromium/manifest.json` is bumped automatically, so commit messages must follow the [Conventional Commits](https://www.conventionalcommits.org/) format:
+
+| Commit prefix | Release |
+| --- | --- |
+| `fix:` | patch |
+| `feat:` | minor |
+| `feat!:` or `BREAKING CHANGE:` | major |
+| `chore:`, `docs:`, `ci:` | no release |
+
 ## Webpage
 
 uDomainFlag is also available as a website at [domainflag.bella.network](http://domainflag.bella.network/?ref=https://github.com/ashcoft/DomainCheck) with some additional information. This page is opened when "additional information" is clicked within the extension.
