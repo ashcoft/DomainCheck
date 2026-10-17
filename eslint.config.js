@@ -41,4 +41,17 @@ export default [
 			"no-console": "off",
 		},
 	},
+	{
+		files: ["tests/**/*.js"],
+		languageOptions: {
+			ecmaVersion: 2022,
+			sourceType: "module",
+			globals: {
+				...globals.node,
+			},
+		},
+		rules: {
+			"no-unused-vars": ["error", { argsIgnorePattern: "^_" }],
+		},
+	},
 ];

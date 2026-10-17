@@ -174,7 +174,7 @@ async function createHarness({
 			try {
 				return new URL(url).hostname;
 			}
-			catch (error) {
+			catch {
 				return false;
 			}
 		},

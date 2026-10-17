@@ -20,6 +20,21 @@ export const api_path = "";
 export const lookup_domain = "domainflag.bella.network";
 export const lookup_protocol = "https";
 
+/**
+ * Builds a link to the lookup website.
+ *
+ * The value is interpolated into the URL path and originates from the lookup
+ * API, so it cannot be trusted. It is encoded and placed as a single path
+ * segment instead of being concatenated into the URL: a raw value could
+ * otherwise inject its own query, fragment or even scheme, turning the link
+ * into a script URL. The result always stays on the fixed lookup host.
+ */
+export function buildLookupUrl(baseUrl, path, value) {
+	const url = new URL(baseUrl);
+	url.pathname = `/${path}/${encodeURIComponent(String(value))}`;
+	return url.href;
+}
+
 export const sentry_target = "https://536650d775194abb959ebeb9f9e744e2@sentry.bella.pm/12";
 
 function getSentry() {
