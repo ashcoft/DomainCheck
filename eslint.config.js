@@ -28,4 +28,17 @@ export default [
 			"no-prototype-builtins": "off",
 		},
 	},
+	{
+		files: ["tools/**/*.js"],
+		languageOptions: {
+			ecmaVersion: 2022,
+			sourceType: "module",
+			globals: {
+				...globals.node,
+			},
+		},
+		rules: {
+			"no-console": "off",
+		},
+	},
 ];
