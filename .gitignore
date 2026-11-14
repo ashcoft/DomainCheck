@@ -11,3 +11,9 @@ $RECYCLE.BIN/
 .vscode/
 node_modules/
 dist/
+
+
+
+.nx/cache
+.nx/workspace-data
+.nx/migrate-runs
